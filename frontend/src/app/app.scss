@@ -1,0 +1,931 @@
+// ─────────────────────────────────────────────────────────
+// Design tokens
+// ─────────────────────────────────────────────────────────
+@use "sass:color";
+$indigo-50: #eef2ff;
+$indigo-600: #4f46e5;
+$indigo-700: #4338ca;
+
+$green-50: #f0fdf4;
+$green-600: #16a34a;
+
+$red-50: #fef2f2;
+$red-600: #dc2626;
+
+$amber-50: #fffbeb;
+$amber-600: #d97706;
+
+$slate-50: #f8fafc;
+$slate-100: #f1f5f9;
+$slate-200: #e2e8f0;
+$slate-300: #cbd5e1;
+$slate-400: #94a3b8;
+$slate-500: #64748b;
+$slate-700: #334155;
+$slate-800: #1e293b;
+$slate-900: #0f172a;
+
+$color-bg: $slate-100;
+$color-surface: #ffffff;
+$color-surface-2: $slate-50;
+$color-border: $slate-200;
+$color-border-strong: $slate-300;
+
+$color-text: $slate-900;
+$color-text-sub: $slate-500;
+$color-text-muted: $slate-400;
+
+$color-primary: $indigo-600;
+$color-primary-h: $indigo-700;
+$color-primary-bg: $indigo-50;
+
+$color-success: $green-600;
+$color-success-bg: $green-50;
+
+$color-danger: $red-600;
+$color-danger-bg: $red-50;
+
+$color-warning: $amber-600;
+$color-warning-bg: $amber-50;
+
+$font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+$mono: ui-monospace, 'Cascadia Code', 'Fira Code', Consolas, monospace;
+
+$sp-1: 4px;
+$sp-2: 8px;
+$sp-3: 12px;
+$sp-4: 16px;
+$sp-5: 20px;
+$sp-6: 24px;
+$sp-8: 32px;
+$sp-10: 40px;
+
+$r-sm: 6px;
+$r-md: 10px;
+$r-lg: 14px;
+$r-pill: 999px;
+
+$shadow-sm: 0 1px 3px rgba(0, 0, 0, .06), 0 1px 2px rgba(0, 0, 0, .04);
+
+@mixin card {
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $r-lg;
+  box-shadow: $shadow-sm;
+}
+
+@mixin label-caps {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: $color-text-muted;
+}
+
+@mixin focus-ring {
+  &:focus-visible {
+    outline: 2px solid $color-primary;
+    outline-offset: 2px;
+    border-radius: $r-sm;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:host {
+  display: block;
+  background: $color-bg;
+  min-height: 100vh;
+  color: $color-text;
+  font-family: $font;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+
+  // Exposed as CSS custom properties so donut gradients (computed in TS) can use them
+  --color-success: #{$color-success};
+  --color-danger: #{$color-danger};
+}
+
+.dash {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: $sp-6 $sp-6 80px;
+}
+
+// ─────────────────────────────────────────────────────────
+// Header
+// ─────────────────────────────────────────────────────────
+
+.dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: $sp-4;
+  margin-bottom: $sp-6;
+
+  &__brand {
+    display: flex;
+    align-items: center;
+    gap: $sp-2;
+  }
+
+  &__controls {
+    display: flex;
+    align-items: center;
+    gap: $sp-3;
+    flex-wrap: wrap;
+  }
+}
+
+.brand {
+
+  &__name,
+  &__accent {
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  &__name {
+    color: $slate-800;
+  }
+
+  &__accent {
+    color: $color-primary;
+  }
+
+  &__chip {
+    @include label-caps;
+    background: $color-primary-bg;
+    color: $color-primary;
+    padding: 2px 8px;
+    border-radius: $r-pill;
+    margin-left: $sp-2;
+  }
+}
+
+.last-updated {
+  font-size: 12px;
+  color: $color-text-muted;
+  font-family: $mono;
+}
+
+.htable__detail-grid--3col {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.htable__doc-summary {
+  font-size: 12px;
+  color: $color-text-sub;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+@media (max-width: 700px) {
+  .htable__detail-grid,
+  .htable__detail-grid--3col { grid-template-columns: 1fr; }
+}
+
+// ─────────────────────────────────────────────────────────
+// Buttons
+// ─────────────────────────────────────────────────────────
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: $sp-2;
+  border: none;
+  border-radius: $r-sm;
+  font-family: $font;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: $sp-2 + 2px $sp-4;
+  transition: background .15s, opacity .15s;
+  @include focus-ring;
+
+  &--secondary {
+    background: $color-surface;
+    color: $color-text-sub;
+    border: 1px solid $color-border;
+
+    &:hover {
+      background: $slate-50;
+      color: $color-text;
+    }
+  }
+
+  &--ghost {
+    background: transparent;
+    color: $color-text-sub;
+    border: 1px solid $color-border;
+
+    &:hover {
+      background: $slate-100;
+      color: $color-text;
+    }
+
+    &:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+  }
+
+  &--danger {
+    background: $color-danger;
+    color: #fff;
+
+    &:hover:not(:disabled) {
+      background: color.adjust($color-danger, $lightness: -8%);
+    }
+
+    &:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+  }
+
+  &--danger-ghost {
+    background: $color-danger-bg;
+    color: $color-danger;
+    border: 1px solid rgba($color-danger, .2);
+
+    &:hover {
+      background: rgba($color-danger, .12);
+    }
+  }
+
+  &--sm {
+    padding: $sp-1 + 2px $sp-3;
+    font-size: 13px;
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// Banner / modal / loading
+// ─────────────────────────────────────────────────────────
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: $sp-3;
+  padding: $sp-3 $sp-4;
+  border-radius: $r-md;
+  font-size: 13px;
+  margin-bottom: $sp-5;
+
+  &--error {
+    background: $color-danger-bg;
+    color: $color-danger;
+    border: 1px solid rgba($color-danger, .2);
+  }
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba($slate-900, .4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: $sp-4;
+}
+
+.modal {
+  @include card;
+  padding: $sp-6;
+  max-width: 380px;
+  width: 100%;
+
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: $sp-2;
+    color: $slate-800;
+  }
+
+  p {
+    font-size: 13px;
+    color: $color-text-sub;
+    margin-bottom: $sp-5;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: $sp-3;
+  }
+}
+
+.loading-state {
+  @include card;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $sp-3;
+  padding: $sp-10;
+  color: $color-text-sub;
+  font-size: 14px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid $color-border;
+  border-top-color: $color-primary;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// KPI cards
+// ─────────────────────────────────────────────────────────
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: $sp-4;
+  margin-bottom: $sp-6;
+}
+
+.kpi-card {
+  @include card;
+  padding: $sp-5;
+  display: flex;
+  flex-direction: column;
+  gap: $sp-2;
+
+  &__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  &__label {
+    @include label-caps;
+  }
+
+  &__icon {
+    font-size: 15px;
+    opacity: .7;
+  }
+
+  &__value {
+    font-size: 28px;
+    font-weight: 700;
+    font-family: $mono;
+    color: $color-text;
+    line-height: 1;
+
+    em {
+      font-size: 13px;
+      font-style: normal;
+      color: $color-text-muted;
+      margin-left: 2px;
+    }
+
+    &--success {
+      color: $color-success;
+    }
+
+    &--danger {
+      color: $color-danger;
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// Charts
+// ─────────────────────────────────────────────────────────
+
+.chart-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: $sp-4;
+  margin-bottom: $sp-6;
+}
+
+.chart-card {
+  @include card;
+  padding: $sp-5;
+
+  &__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: $sp-4;
+
+    h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: $slate-800;
+    }
+  }
+
+  &__sub {
+    font-size: 12px;
+    color: $color-text-muted;
+  }
+}
+
+.chart-empty {
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $color-text-muted;
+  font-size: 13px;
+  text-align: center;
+  padding: 0 $sp-4;
+}
+
+.trend-chart {
+  width: 100%;
+  height: 120px;
+  overflow: visible;
+
+  &__grid {
+    stroke: $color-border;
+    stroke-width: 1;
+  }
+
+  &__axis-label {
+    font-size: 8px;
+    fill: $color-text-muted;
+    font-family: $mono;
+  }
+
+  &__area {
+    fill: rgba($color-primary, .08);
+    stroke: none;
+  }
+
+  &__line {
+    fill: none;
+    stroke: $color-primary;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  &__dot {
+    fill: $color-surface;
+    stroke: $color-primary;
+    stroke-width: 2;
+    cursor: pointer;
+
+    &:hover {
+      fill: $color-primary;
+    }
+  }
+}
+
+.donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: $sp-4;
+  justify-content: center;
+}
+
+.donut {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  &__hole {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: $color-surface;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__n {
+    font-size: 15px;
+    font-weight: 700;
+    font-family: $mono;
+    color: $color-text;
+  }
+
+  &__l {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: $color-text-muted;
+  }
+}
+
+.legend {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: $sp-2;
+  font-size: 12px;
+  color: $color-text-sub;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: $sp-2;
+  }
+
+  &__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+
+    &--success {
+      background: $color-success;
+    }
+
+    &--danger {
+      background: $color-danger;
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// History card
+// ─────────────────────────────────────────────────────────
+
+.history-card {
+  @include card;
+  padding: $sp-5;
+}
+
+.history-card__head {
+  display: flex;
+  flex-direction: column;
+  gap: $sp-4;
+  margin-bottom: $sp-4;
+
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: $slate-800;
+  }
+}
+
+.history-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $sp-3;
+}
+
+.search {
+  @include focus-ring;
+  flex: 1;
+  min-width: 180px;
+  border: 1px solid $color-border;
+  border-radius: $r-sm;
+  padding: $sp-2 $sp-3;
+  font-size: 13px;
+  font-family: $font;
+  background: $color-surface-2;
+
+  &::placeholder {
+    color: $color-text-muted;
+  }
+
+  &:focus {
+    border-color: $color-primary;
+    background: $color-surface;
+  }
+}
+
+.chips {
+  display: flex;
+  gap: $sp-1;
+  background: $slate-100;
+  padding: 3px;
+  border-radius: $r-pill;
+}
+
+.chip {
+  border: none;
+  background: transparent;
+  padding: $sp-1 + 1px $sp-3;
+  border-radius: $r-pill;
+  font-size: 12px;
+  font-weight: 500;
+  color: $color-text-sub;
+  cursor: pointer;
+  @include focus-ring;
+
+  &:hover {
+    color: $color-text;
+  }
+
+  &--active {
+    background: $color-surface;
+    color: $color-primary;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// History table
+// ─────────────────────────────────────────────────────────
+
+.htable {
+  border: 1px solid $color-border;
+  border-radius: $r-md;
+  overflow: hidden;
+
+  &__head {
+    display: grid;
+    grid-template-columns: 2fr .8fr .6fr .8fr 1fr 24px;
+    padding: $sp-2 + 2px $sp-4;
+    background: $slate-50;
+    border-bottom: 1px solid $color-border;
+    gap: $sp-4;
+  }
+
+  &__sort {
+    @include label-caps;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+
+    &:hover {
+      color: $color-text-sub;
+    }
+  }
+
+  &__sort-icon {
+    color: $color-primary;
+  }
+
+  &__row {
+    display: grid;
+    grid-template-columns: 2fr .8fr .6fr .8fr 1fr 24px;
+    padding: $sp-3 $sp-4;
+    border-bottom: 1px solid $color-border;
+    font-size: 13px;
+    align-items: center;
+    gap: $sp-4;
+    cursor: pointer;
+    transition: background .1s;
+
+    &:last-of-type {
+      border-bottom: none;
+    }
+
+    &:hover {
+      background: $slate-50;
+    }
+  }
+
+  &__pr {
+    display: flex;
+    flex-direction: column;
+    font-weight: 500;
+    color: $color-text;
+    overflow: hidden;
+
+    em {
+      font-style: normal;
+      font-family: $mono;
+      font-size: 11px;
+      color: $color-text-muted;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  &__date {
+    font-family: $mono;
+    font-size: 11px;
+    color: $color-text-muted;
+  }
+
+&__chevron {
+  color: $slate-700;
+  font-size: 14px;
+  transition: transform .15s, color .15s;
+  text-align: center;
+
+  &--open {
+    transform: rotate(180deg);
+    color: $color-primary;
+  }
+}
+
+  &__detail {
+    padding: $sp-4 $sp-4 $sp-4 $sp-4;
+    background: $color-surface-2;
+    border-bottom: 1px solid $color-border;
+    font-size: 13px;
+
+    &-summary {
+      color: $color-text-sub;
+      margin-bottom: $sp-3;
+      line-height: 1.6;
+      white-space: pre-wrap;  
+    }
+
+    &-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: $sp-5;
+
+      h4 {
+        @include label-caps;
+        margin-bottom: $sp-2;
+      }
+
+      ul {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      li {
+        font-size: 12px;
+        color: $color-text-sub;
+        display: flex;
+        align-items: center;
+        gap: $sp-2;
+      }
+
+      .muted {
+        font-size: 12px;
+        color: $color-text-muted;
+      }
+    }
+  }
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $sp-4;
+  margin-top: $sp-4;
+  font-size: 13px;
+  color: $color-text-sub;
+}
+
+// ─────────────────────────────────────────────────────────
+// Reused status indicators
+// ─────────────────────────────────────────────────────────
+
+.score-pill {
+  font-family: $mono;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: $r-pill;
+  background: $slate-100;
+  color: $color-text-sub;
+  font-weight: 500;
+
+  &--high {
+    background: $color-success-bg;
+    color: $color-success;
+  }
+
+  &--low {
+    background: $color-danger-bg;
+    color: $color-danger;
+  }
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: $slate-300;
+
+  &--safe {
+    background: $color-success;
+  }
+
+  &--unsafe {
+    background: $color-danger;
+  }
+}
+
+.text--success {
+  color: $color-success;
+  font-weight: 500;
+}
+
+.text--danger {
+  color: $color-danger;
+  font-weight: 500;
+}
+
+.sev-chip {
+  @include label-caps;
+  padding: 1px 6px;
+  border-radius: $r-pill;
+  font-size: 10px;
+
+  &[data-sev="critical"],
+  &[data-sev="high"] {
+    background: $color-danger-bg;
+    color: $color-danger;
+  }
+
+  &[data-sev="medium"] {
+    background: $color-warning-bg;
+    color: $color-warning;
+  }
+
+  &[data-sev="low"] {
+    background: $color-success-bg;
+    color: $color-success;
+  }
+}
+
+.empty-state {
+  padding: $sp-10;
+  text-align: center;
+  color: $color-text-muted;
+
+  span {
+    font-size: 28px;
+    display: block;
+    margin-bottom: $sp-3;
+  }
+
+  p {
+    font-size: 14px;
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// Responsive
+// ─────────────────────────────────────────────────────────
+
+@media (max-width: 980px) {
+  .chart-row {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+
+  .htable__head,
+  .htable__row {
+    grid-template-columns: 2fr .7fr .8fr 24px;
+
+    .htable__date,
+    .htable__row>span:nth-child(2) {
+      display: none;
+    }
+  }
+
+  .htable__detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .dash {
+    padding: $sp-4 $sp-4 60px;
+  }
+
+  .kpi-row {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,270 @@
+<div class="dash">
+
+  <!-- Header -->
+  <header class="dash-header">
+    <div class="dash-header__brand">
+      <span class="brand__name">DevPilot</span><span class="brand__accent">AI</span>
+      <span class="brand__chip">Dashboard</span>
+    </div>
+    <div class="dash-header__controls">
+      @if (lastUpdated) {
+      <span class="last-updated">Updated {{ lastUpdated | date:'HH:mm:ss' }}</span>
+      }
+      <button class="btn btn--danger-ghost btn--sm" (click)="confirmClear()">Clear history</button>
+    </div>
+  </header>
+
+  <!-- Error banner (non-blocking — stale data stays visible) -->
+  @if (error) {
+  <div class="banner banner--error">
+    <span>⚠</span> {{ error }}
+  </div>
+  }
+
+  <!-- Clear-all confirmation modal -->
+  @if (showClearConfirm) {
+  <div class="modal-backdrop" (click)="cancelClear()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <h3>Clear all review history?</h3>
+      <p>This permanently deletes every saved review. This can't be undone.</p>
+      <div class="modal__actions">
+        <button class="btn btn--secondary" (click)="cancelClear()">Cancel</button>
+        <button class="btn btn--danger" [disabled]="clearing" (click)="clearHistory()">
+          {{ clearing ? 'Clearing…' : 'Delete everything' }}
+        </button>
+      </div>
+    </div>
+  </div>
+  }
+
+  @if (loading) {
+  <div class="loading-state">
+    <span class="spinner"></span> Loading dashboard…
+  </div>
+  } @else {
+
+  <!-- KPI cards -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-card__top">
+        <span class="kpi-card__label">Total reviews</span>
+        <span class="kpi-card__icon">📥</span>
+      </div>
+      <span class="kpi-card__value">{{ analytics?.total_reviews ?? 0 }}</span>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-card__top">
+        <span class="kpi-card__label">Average score</span>
+        <span class="kpi-card__icon">⭐</span>
+      </div>
+      <span class="kpi-card__value" [class.kpi-card__value--danger]="(analytics?.average_score ?? 10) < 5"
+        [class.kpi-card__value--success]="(analytics?.average_score ?? 0) >= 7">
+        {{ analytics?.average_score ?? 0 }}<em>/10</em>
+      </span>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-card__top">
+        <span class="kpi-card__label">Approval rate</span>
+        <span class="kpi-card__icon">✓</span>
+      </div>
+      <span class="kpi-card__value kpi-card__value--success">
+        {{ analytics?.approval_rate ?? 0 }}<em>%</em>
+      </span>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-card__top">
+        <span class="kpi-card__label">Security flags</span>
+        <span class="kpi-card__icon">🔐</span>
+      </div>
+      <span class="kpi-card__value" [class.kpi-card__value--danger]="(analytics?.security_issues ?? 0) > 0">
+        {{ analytics?.security_issues ?? 0 }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="chart-row">
+
+    <div class="chart-card chart-card--wide">
+      <div class="chart-card__head">
+        <h3>Score trend</h3>
+        <span class="chart-card__sub">Last {{ history.length }} reviews</span>
+      </div>
+
+      @if (scoreTrendPoints.length < 2) { <div class="chart-empty">Not enough data yet — run a few more reviews to see a
+        trend
+    </div>
+    } @else {
+    <svg class="trend-chart" [attr.viewBox]="'0 0 ' + CHART_W + ' ' + CHART_H">
+      @for (g of gridLines; track g.score) {
+      <line [attr.x1]="PAD.left" [attr.x2]="CHART_W - PAD.right" [attr.y1]="g.y" [attr.y2]="g.y"
+        class="trend-chart__grid" />
+      <text [attr.x]="PAD.left - 6" [attr.y]="g.y + 3" class="trend-chart__axis-label" text-anchor="end">{{ g.score
+        }}</text>
+      }
+      <path [attr.d]="scoreTrendAreaPath" class="trend-chart__area" />
+      <path [attr.d]="scoreTrendPath" class="trend-chart__line" />
+      @for (p of scoreTrendPoints; track $index) {
+      <circle [attr.cx]="p.x" [attr.cy]="p.y" r="2.6" class="trend-chart__dot">
+        <title>{{ p.score }}/10</title>
+      </circle>
+      }
+    </svg>
+    }
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-card__head">
+      <h3>Outcomes</h3>
+    </div>
+    <div class="donut-wrap">
+      <div class="donut" [style.background]="approvedGradient">
+        <div class="donut__hole">
+          <span class="donut__n">{{ approvedPct }}%</span>
+          <span class="donut__l">Approved</span>
+        </div>
+      </div>
+      <ul class="legend">
+        <li><span class="legend__dot legend__dot--success"></span>Approved</li>
+        <li><span class="legend__dot legend__dot--danger"></span>Blocked</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-card__head">
+      <h3>Security</h3>
+    </div>
+    <div class="donut-wrap">
+      <div class="donut" [style.background]="safeGradient">
+        <div class="donut__hole">
+          <span class="donut__n">{{ safePct }}%</span>
+          <span class="donut__l">Safe</span>
+        </div>
+      </div>
+      <ul class="legend">
+        <li><span class="legend__dot legend__dot--success"></span>Safe</li>
+        <li><span class="legend__dot legend__dot--danger"></span>Flagged</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- History -->
+<div class="history-card">
+  <div class="history-card__head">
+    <h3>Review history</h3>
+    <div class="history-controls">
+      <input class="search" [(ngModel)]="searchTerm" (ngModelChange)="onSearchChange()"
+        placeholder="Search title or file…" />
+      <div class="chips">
+        <button class="chip" [class.chip--active]="statusFilter==='all'" (click)="setStatusFilter('all')">All</button>
+        <button class="chip" [class.chip--active]="statusFilter==='approved'"
+          (click)="setStatusFilter('approved')">Approved</button>
+        <button class="chip" [class.chip--active]="statusFilter==='blocked'"
+          (click)="setStatusFilter('blocked')">Blocked</button>
+      </div>
+      <div class="chips">
+        <button class="chip" [class.chip--active]="safetyFilter==='all'" (click)="setSafetyFilter('all')">All</button>
+        <button class="chip" [class.chip--active]="safetyFilter==='safe'"
+          (click)="setSafetyFilter('safe')">Safe</button>
+        <button class="chip" [class.chip--active]="safetyFilter==='unsafe'"
+          (click)="setSafetyFilter('unsafe')">Flagged</button>
+      </div>
+    </div>
+  </div>
+
+  @if (!filteredHistory.length) {
+  <div class="empty-state">
+    <span>📋</span>
+    <p>{{ history.length ? 'No reviews match your filters' : 'No reviews yet — trigger one from a PR to get started' }}
+    </p>
+  </div>
+  } @else {
+  <div class="htable">
+    <div class="htable__head">
+      <button class="htable__sort" (click)="setSort('pr_title')">
+        Snippet <span class="htable__sort-icon">{{ sortIcon('pr_title') }}</span>
+      </button>
+      <button class="htable__sort" (click)="setSort('score')">
+        Score <span class="htable__sort-icon">{{ sortIcon('score') }}</span>
+      </button>
+      <span>Security</span>
+      <span>Status</span>
+      <button class="htable__sort" (click)="setSort('created_at')">
+        Date <span class="htable__sort-icon">{{ sortIcon('created_at') }}</span>
+      </button>
+      <span></span>
+    </div>
+
+    @for (r of pagedHistory; track r.created_at + r.filename + $index; let i = $index) {
+    <div class="htable__row" (click)="toggleExpand(i)">
+      <span class="htable__pr">{{ r.pr_title }}<em>{{ r.filename }}</em></span>
+      <span>
+        <span class="score-pill" [class.score-pill--low]="r.score < 5" [class.score-pill--high]="r.score >= 7">
+          {{ r.score }}/10
+        </span>
+      </span>
+      <span><span class="dot" [class.dot--safe]="r.is_safe" [class.dot--unsafe]="!r.is_safe"></span></span>
+      <span [class.text--danger]="r.blocked" [class.text--success]="!r.blocked">
+        {{ r.blocked ? 'Blocked' : 'Approved' }}
+      </span>
+      <span class="htable__date">{{ r.created_at }}</span>
+      <span class="htable__chevron" [class.htable__chevron--open]="expandedRow===i">⌄</span>
+    </div>
+
+    @if (expandedRow === i) {
+    <div class="htable__detail">
+      @if (r.summary) {
+      <p class="htable__detail-summary">{{ r.summary }}</p>
+      }
+      <div class="htable__detail-grid htable__detail-grid--3col">
+        <div>
+          <h4>Issues ({{ r.issues?.length || 0 }})</h4>
+          @if (r.issues?.length) {
+          <ul>@for (iss of r.issues; track $index) { <li>{{ iss }}</li> }</ul>
+          } @else {
+          <p class="muted">None found</p>
+          }
+        </div>
+        <div>
+          <h4>Vulnerabilities ({{ r.vulnerabilities?.length || 0 }})</h4>
+          @if (r.vulnerabilities?.length) {
+          <ul>
+            @for (v of r.vulnerabilities; track $index) {
+            <li>
+              <span class="sev-chip" [attr.data-sev]="v.severity?.toLowerCase()">{{ v.severity }}</span>
+              {{ v.type }}
+            </li>
+            }
+          </ul>
+          } @else {
+          <p class="muted">None found</p>
+          }
+        </div>
+        <div>
+          <h4>Documentation</h4>
+          @if (r.doc_summary) {
+          <p class="htable__doc-summary">{{ r.doc_summary }}</p>
+          } @else {
+          <p class="muted">No summary generated</p>
+          }
+        </div>
+      </div>
+    </div>
+    }
+    }
+  </div>
+
+  <div class="pagination">
+    <button class="btn btn--ghost btn--sm" [disabled]="page===1" (click)="prevPage()">← Prev</button>
+    <span>Page {{ page }} of {{ totalPages }}</span>
+    <button class="btn btn--ghost btn--sm" [disabled]="page===totalPages" (click)="nextPage()">Next →</button>
+  </div>
+  }
+</div>
+}
+</div>
