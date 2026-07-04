@@ -6,6 +6,6 @@ class DocumentationAgent(BaseAgent):
 
         Format your response exactly as this JSON object template:
         {
-            "summary": "2-3 sentence summary of what this code does and why"
+            "summary": "5-6 sentence summary of what this code does and why"
         }"""
         return self.ask_llm_json(system_prompt, f"Summarize this code from {filename}:\n\n{code}")

@@ -13,7 +13,7 @@ class GitHubMCP:
             raise ValueError("❌ Missing environment variable: GITHUB_TOKEN")
         self.github = Github(token)   
 
-    def get_pr_files(self, repo_name: str, pr_number: int, max_files: int = 3) -> list:
+    def get_pr_files(self, repo_name: str, pr_number: int, max_files: int = 5) -> list:
         try:
             repo = self.github.get_repo(repo_name)
             pr = repo.get_pull(pr_number)

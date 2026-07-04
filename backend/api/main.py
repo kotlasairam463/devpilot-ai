@@ -35,7 +35,7 @@ def process_webhook_pipeline(repo_name: str, pr_number: int, pr_title: str, pr_u
     """
     results = []
 
-    for file in files[:3]:
+    for file in files[:5]:
         if not file.get("code") or len(file["code"].strip()) == 0:
             continue
 
