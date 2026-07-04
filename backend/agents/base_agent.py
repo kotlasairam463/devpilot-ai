@@ -22,7 +22,7 @@ class BaseAgent:
         else:
             self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
             self.model_name = "gemini-3.5-flash"
-            
+           
         
         self.config = types.GenerateContentConfig(
             temperature=0.1,
