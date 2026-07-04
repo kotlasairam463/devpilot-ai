@@ -18,10 +18,10 @@ class BaseAgent:
                 project=os.getenv("GCP_PROJECT_ID"),
                 location=os.getenv("GCP_LOCATION", "us-central1")
             )
-            self.model_name = "gemini-2.5-pro"
+            self.model_name = "gemini-3.5-pro"
         else:
             self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-            self.model_name = "gemini-2.5-flash"
+            self.model_name = "gemini-3.5-flash"
         
         self.config = types.GenerateContentConfig(
             temperature=0.1,
