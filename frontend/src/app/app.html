@@ -212,7 +212,7 @@
       <span [class.text--danger]="r.blocked" [class.text--success]="!r.blocked">
         {{ r.blocked ? 'Blocked' : 'Approved' }}
       </span>
-      <span class="htable__date">{{ r.created_at }}</span>
+      <span class="htable__date">{{ r.created_at | date:'yyyy-MM-dd HH:mm':'+0530' }}</span>
       <span class="htable__chevron" [class.htable__chevron--open]="expandedRow===i">⌄</span>
     </div>
 

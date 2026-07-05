@@ -14,6 +14,18 @@ class DevPilotDB:
         self.reviews = db["reviews"]
         self.security_issues = db["security_issues"]
         self.analytics = db["analytics"]
+        self.pr_tracking = db["pr_tracking"]
+
+    def get_last_reviewed_sha(self, pr_url: str) -> str | None:
+        doc = self.pr_tracking.find_one({"pr_url": pr_url})
+        return doc.get("last_sha") if doc else None
+
+    def set_last_reviewed_sha(self, pr_url: str, sha: str):
+        self.pr_tracking.update_one(
+            {"pr_url": pr_url},
+            {"$set": {"pr_url": pr_url, "last_sha": sha, "updated_at": datetime.now()}},
+            upsert=True
+        )
 
     def save_review(self, pr_data: dict, result: dict) -> str:
         """Save complete PR review"""
@@ -66,7 +78,7 @@ class DevPilotDB:
         # Convert datetime to string for clean serialization
         for r in reviews:
             if "created_at" in r and isinstance(r["created_at"], datetime):
-                r["created_at"] = r["created_at"].strftime("%Y-%m-%d %H:%M")
+                r["created_at"] = r["created_at"].isoformat() + "Z"
         return reviews
     def delete_all_reviews(self) -> dict:
         reviews_result = self.reviews.delete_many({})
