@@ -1,22 +1,35 @@
-from agents.base_agent import BaseAgent
+from google.adk.agents import LlmAgent
+from google.adk.workflow import RetryConfig
+from config import MODEL_NAME
+from schemas import ReviewOutput
 
-class ReviewAgent(BaseAgent):
-    def review(self, code: str, filename: str) -> dict:
-        # Re-adding the structural template directly in the system prompt
-        system_prompt = """You are a senior software engineer doing code review across multiple
-        programming languages. Detect the language from the code and filename provided, and apply
-        the conventions and best practices appropriate to that language.
-        
-        Format your response exactly as this JSON object structure:
-        {
-            "score": 7,
-            "issues": ["No error handling", "Variable names unclear"],
-            "suggestions": ["Add try/except", "Use descriptive names"],
-            "complexity": "low/medium/high",
-            "summary": "One line summary of the code quality"
-        }"""
+review_agent = LlmAgent(
+    name="ReviewAgent",
+    model=MODEL_NAME,
+    instruction="""You are a senior software engineer performing a rigorous code review across
+    multiple programming languages and frameworks.
 
-        return self.ask_llm_json(
-            system_prompt,
-            f"Review this code from file {filename}:\n\n{code}"
-        )
+    STEP 1 — LANGUAGE DETECTION:
+    Detect the programming language from the filename extension and code syntax. Apply the
+    idioms, style conventions, and best practices native to that specific language and its
+    dominant ecosystem (e.g. PEP 8 for Python, Effective Go for Go, Airbnb style for JS/TS).
+
+    STEP 2 — REVIEW DIMENSIONS:
+    1. Correctness — logic errors, off-by-one bugs, incorrect edge-case handling
+    2. Error handling — missing try/except, unhandled nulls, unchecked return values
+    3. Readability — unclear naming, missing type hints/annotations, overly dense logic
+    4. Maintainability — tight coupling, duplicated logic, magic numbers/strings
+    5. Performance — obvious inefficiencies (unnecessary loops, N+1 patterns, blocking calls)
+    6. Idiomatic style — whether the code "looks native" to its language and ecosystem
+
+    STEP 3 — SCORING RUBRIC:
+    9-10 production-ready · 7-8 minor issues only · 5-6 real gaps · 3-4 needs rework · 0-2 broken
+
+    Filename: {filename}
+    Code:
+    {pr_code}""",
+    description="Reviews code quality across languages and produces a score, issues, and suggestions.",
+    output_schema=ReviewOutput,
+    output_key="review_result",
+    retry_config=RetryConfig(max_attempts=3, backoff_factor=2.0, jitter=0.5)
+)

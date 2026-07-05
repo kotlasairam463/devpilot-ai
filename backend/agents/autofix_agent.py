@@ -1,54 +1,61 @@
-from agents.base_agent import BaseAgent
+import json
+from typing import AsyncGenerator
+from google.adk.agents import LlmAgent, BaseAgent
+from google.adk.workflow import RetryConfig
+from google.adk.agents.invocation_context import InvocationContext
+from google.adk.events import Event
+from config import MODEL_NAME
+from schemas import AutoFixOutput
+
+_autofix_llm = LlmAgent(
+    name="AutoFixLLM",
+    model=MODEL_NAME,
+    instruction="""You are a senior systems developer and automation engineer.
+    Review the code provided alongside the specific security flaws and structural issues listed.
+    Refactor the source code completely to repair all defects, preserving original intended
+    features and using language-idiomatic safety structures.
+
+    Original code:
+    {pr_code}
+
+    Issues found: {review_result}
+    Vulnerabilities found: {security_result}""",
+    description="Generates a fixed version of the code based on found issues and vulnerabilities.",
+    output_schema=AutoFixOutput,
+    output_key="autofix_result",
+    retry_config=RetryConfig(max_attempts=3, backoff_factor=2.0, jitter=0.5)
+)
+
+
+def _safe_parse(raw, default):
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return json.loads(raw)
+    except Exception:
+        return default
+
 
 class AutoFixAgent(BaseAgent):
-    def fix(self, code: str, issues: list, vulnerabilities: list) -> dict:
-        # Prevent key crashes by extracting the problem text safely using .get()
-        extracted_vulns = []
-        for v in vulnerabilities:
-            if isinstance(v, dict):
-                extracted_vulns.append(v.get("type") or v.get("issue") or str(v))
-            else:
-                extracted_vulns.append(str(v))
-                
-        all_problems = issues + extracted_vulns
-        problems_text = "\n".join(f"- {p}" for p in all_problems)
+    """Only invokes the AutoFix LLM if Review or Security actually found something."""
 
-        # Optimized Prompt: Structural template optimized for complex code containment
-        system_prompt = """You are a senior systems developer and automation engineer.
-        Review the code provided alongside the specific security flaws and structural issues listed.
-        
-        Refactor the source code completely to repair all defects. Ensure the fix preserves the original
-        intended features and uses language-idiomatic safety structures.
-        
-        Format your response exactly as this JSON object structure:
-        {
-            "fixed_code": "The complete, refactored, and updated source code goes here as an escaped text string.",
-            "changes_made": [
-                "Detailed summary item of a resolved defect",
-                "Another structural adjustment action"
-            ],
-            "explanation": "A high-level summary overview explaining why these structural choices were made."
-        }"""
+    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
+        state = ctx.session.state
+        review_data = _safe_parse(state.get("review_result"), {})
+        security_data = _safe_parse(state.get("security_result"), {})
 
-        return self.ask_llm_json(
-            system_prompt,
-            f"REFACTOR TARGET CODE:\n{code}\n\nLIST OF SECURITY & LOGIC PROBLEMS TO REPAIR:\n{problems_text}"
-        )
+        issues = review_data.get("issues", [])
+        vulns = security_data.get("vulnerabilities", [])
 
-# Quick test
-if __name__ == "__main__":
-    agent = AutoFixAgent()
-    
-    bad_code = """
-def process_user(user_id):
-    query = "SELECT * FROM users WHERE id = " + user_id
-    db.execute(query)
-    """
-    
-    test_issues = ["Missing type hints"]
-    test_vulns = [{"type": "SQL Injection vulnerability through string concatenation"}]
-    
-    result = agent.fix(bad_code, test_issues, test_vulns)
-    
-    import pprint
-    pprint.pprint(result)
+        if issues or vulns:
+            async for event in _autofix_llm.run_async(ctx):
+                yield event
+        else:
+            ctx.session.state["autofix_result"] = json.dumps({
+                "fixed_code": None,
+                "changes_made": [],
+                "explanation": "No issues or vulnerabilities found — no fix needed."
+            })
+
+
+autofix_agent = AutoFixAgent(name="AutoFixAgent")

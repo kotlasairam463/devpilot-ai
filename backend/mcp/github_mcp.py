@@ -79,6 +79,50 @@ class GitHubMCP:
         except GithubException as ge:
             print(f"❌ Failed to create security issue: {ge}")
 
+    def get_pr_files_since(self, repo_name: str, pr_number: int, since_sha: str, max_files: int = 5) -> list:
+        """Fetches only files changed since a previous commit SHA. Falls back to
+        the full file list if the comparison fails (e.g. force-push rewrote history)."""
+        try:
+            repo = self.github.get_repo(repo_name)
+            pr = repo.get_pull(pr_number)
+            head_sha = pr.head.sha
+
+            if since_sha == head_sha:
+                return []  # nothing new since last review
+
+            comparison = repo.compare(since_sha, head_sha)
+            ref_branch = head_sha
+            files = []
+            files_processed = 0
+
+            for f in comparison.files:
+                if files_processed >= max_files:
+                    break
+                if f.status == "removed" or not f.filename:
+                    continue
+
+                full_code = ""
+                try:
+                    contents = repo.get_contents(f.filename, ref=ref_branch)
+                    if contents.encoding == "base64":
+                        full_code = base64.b64decode(contents.content).decode("utf-8")
+                    else:
+                        full_code = contents.decoded_content.decode("utf-8")
+                except Exception:
+                    full_code = f.patch or ""
+
+                files.append({
+                    "filename": f.filename, "code": full_code, "patch": f.patch or "",
+                    "additions": f.additions, "deletions": f.deletions
+                })
+                files_processed += 1
+
+            return files
+
+        except Exception as e:
+            print(f"⚠️ Incremental diff failed, falling back to full file list: {e}")
+            return self.get_pr_files(repo_name, pr_number, max_files=max_files)
+
 
 
 # Local Test verification

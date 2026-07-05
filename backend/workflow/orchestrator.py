@@ -1,94 +1,117 @@
-# workflow/orchestrator.py
-# Google GenAI SDK Pipeline — Lightweight sequential workflow automation
+import config  # noqa: F401 — must import first
 
-from workflow.state import make_initial_state, PipelineState  # Updated Import Path
-from agents.review_agent import ReviewAgent
-from agents.security_agent import SecurityAgent
-from agents.test_agent import TestAgent
-from agents.autofix_agent import AutoFixAgent
-from agents.documentation_agent import DocumentationAgent
+import json
+import uuid
+from google.adk.agents import SequentialAgent, ParallelAgent
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.genai import types
+
+from agents.review_agent import review_agent
+from agents.security_agent import security_agent
+from agents.autofix_agent import autofix_agent
+from agents.testcase_agent import testcase_agent
+from agents.documentation_agent import documentation_agent
+
+APP_NAME = "devpilot_ai"
+
+# Wave 1 — Review and Security are independent, run concurrently
+analysis_wave = ParallelAgent(
+    name="AnalysisWave",
+    sub_agents=[review_agent, security_agent]
+)
+
+# Wave 3 — TestCase and Documentation both only need the (possibly fixed) code
+finalization_wave = ParallelAgent(
+    name="FinalizationWave",
+    sub_agents=[testcase_agent, documentation_agent]
+)
+
+# AutoFix (Wave 2) has a real data dependency on both Review and Security,
+# so it sits between the two parallel waves.
+pipeline = SequentialAgent(
+    name="DevPilotPipeline",
+    sub_agents=[analysis_wave, autofix_agent, finalization_wave]
+)
+
+_session_service = InMemorySessionService()
+_runner = Runner(agent=pipeline, app_name=APP_NAME, session_service=_session_service)
 
 
-# Initialize specialist agents once at module level
-_review   = ReviewAgent()
-_security = SecurityAgent()
-_test     = TestAgent()
-_autofix  = AutoFixAgent()
-_documentation = DocumentationAgent()
-
-
-def run_pipeline(
-    pr_title: str,
-    pr_code: str,
-    filename: str,
-    pr_url: str = ""
-) -> PipelineState:
-    """
-    Runs all four specialist agents sequentially using a shared state data model.
-    Enforces cross-agent runtime error boundaries and fallback states.
-    """
-    state = make_initial_state(pr_title, pr_code, filename, pr_url)
-
-    # ── Station 1: Review Agent ──────────────────────────
-    print("🔍 [1/6] Review Agent running...")
-    state["review_result"] = _review.review(pr_code, filename) or {}
-
-    # ── Station 2: Security Agent ────────────────────────
-    print("🔐 [2/6] Security Agent running...")
-    state["security_result"] = _security.scan(pr_code) or {}
-
-    # ── Station 3: AutoFix Agent ─────────────────────────
-    print("🛠️  [3/6] AutoFix Agent running...")
-    review_data   = state["review_result"]
-    security_data = state["security_result"]
-    
-    issues = review_data.get("issues", [])
-    vulns  = security_data.get("vulnerabilities", [])
-    
-    if issues or vulns:
-        fix_response = _autofix.fix(pr_code, issues, vulns) or {}
-        state["fixed_code"] = fix_response.get("fixed_code")
-    
-    # ── Station 4: Test Agent ────────────────────────────
-    print("🧪 [4/6] Test Agent running...")
-    target_code = state["fixed_code"] if state["fixed_code"] else pr_code
-    
+def _parse(raw, default):
+    if isinstance(raw, dict):
+        return raw
     try:
-        state["generated_tests"] = _test.generate_tests(target_code, filename)
+        return json.loads(raw)
     except Exception as e:
-        print(f"⚠️ Test generation temporarily skipped due to server availability: {e}")
-        state["generated_tests"] = "// Unit tests unavailable due to temporary provider demand."
+        print(f"⚠️ Failed to parse agent output: {e} | raw={raw!r}")
+        return default
 
-    # ── Station 5: Documentation Agent ───────────────────
-    print("📚 [5/6] Documentation Agent running...")
-    target_code = state["fixed_code"] if state["fixed_code"] else pr_code
-    doc_result = _documentation.document(target_code, filename) or {}
-    state["doc_summary"] = doc_result.get("summary")
 
-    # ── Station 6: Summary Generation ────────────────────
-    print("📝 [6/6] Creating consolidated workflow summary...")
+async def run_pipeline(pr_title: str, pr_code: str, filename: str, pr_url: str = "") -> dict:
+    user_id = "webhook"
+    session_id = str(uuid.uuid4())
+
+    session = await _session_service.create_session(
+        app_name=APP_NAME,
+        user_id=user_id,
+        session_id=session_id,
+        state={"pr_title": pr_title, "pr_code": pr_code, "filename": filename, "pr_url": pr_url}
+    )
+
+    trigger_message = types.Content(role="user", parts=[types.Part(text=f"Review this PR: {pr_title}")])
+
+    agent_outputs = {}
+
+    try:
+        async for _event in _runner.run_async(user_id=user_id, session_id=session_id, new_message=trigger_message):
+            author = getattr(_event, "author", None)
+            if hasattr(_event, "content") and _event.content and author:
+                try:
+                    text = _event.content.parts[0].text
+                    agent_outputs[author] = text
+                except (AttributeError, IndexError):
+                    pass
+    except Exception as e:
+        print(f"⚠️ Pipeline execution error (likely transient API issue): {e}")
+    print(f"🔍 CAPTURED AGENT OUTPUTS: {agent_outputs}")
+
+    review_data = _parse(agent_outputs.get("ReviewAgent"), {})
+    security_data = _parse(agent_outputs.get("SecurityAgent"), {})
+    autofix_data = _parse(agent_outputs.get("AutoFixLLM") or agent_outputs.get("AutoFixAgent"), {})
+    doc_data = _parse(agent_outputs.get("DocumentationAgent"), {})
+    generated_testcases = agent_outputs.get("TestCaseAgent")
+
+    issues = review_data.get("issues", [])
+    vulns = security_data.get("vulnerabilities", [])
     score = review_data.get("score", 5)
-    
+    fixed_code = autofix_data.get("fixed_code")
+    doc_summary = doc_data.get("summary")
+
+    has_critical = any(v.get("severity") == "critical" for v in vulns if isinstance(v, dict))
+    should_block_merge = has_critical or score < 5
+    severity_level = "critical" if has_critical else "high" if vulns else "low"
+
     issues_text = "\n".join(f"- {i}" for i in issues)
-    vulns_text  = "\n".join(
-        f"- {v.get('type', 'Unknown')} ({v.get('severity','high')}): {v.get('fix', '')}"
+    vulns_text = "\n".join(
+        f"- {v.get('type','Unknown')} ({v.get('severity','high')}): {v.get('fix','')}"
         for v in vulns if isinstance(v, dict)
     )
     suggestions_text = "\n".join(f"- {s}" for s in review_data.get("suggestions", []))
 
-    has_critical = any(v.get("severity") == "critical" for v in vulns if isinstance(v, dict))
-    state["should_block_merge"] = has_critical or score < 5
-    state["severity_level"]     = "critical" if has_critical else "high" if vulns else "low"
-    state["overall_score"]      = score
-
-    state["final_summary"] = f"""
+    autofix_section = (
+    f"A refactored version was generated. View it on the DevPilot dashboard, or see below:\n\n```\n{fixed_code}\n```"
+    if fixed_code else "No auto-remediation updates were requested."
+    )
+    
+    final_summary = f"""
 ## 🤖 DevPilot AI Review
 
 **PR:** {pr_title}
 **File:** {filename}
 **Code Quality Score:** {score}/10
 **Security Status:** {'🔴 UNSAFE' if vulns else '✅ SAFE'}
-**Merge Decision:** {'🚫 BLOCKED — Fix issues before merging' if state['should_block_merge'] else '✅ APPROVED — Safe to merge'}
+**Merge Decision:** {'🚫 BLOCKED — Fix issues before merging' if should_block_merge else '✅ APPROVED — Safe to merge'}
 
 ---
 
@@ -103,36 +126,32 @@ def run_pipeline(
 
 ---
 ### 🛠️ Auto-Fix Code Changes:
-{ "Refactored variant generated successfully. Review the file changes before staging." if state["fixed_code"] else "No auto-remediation updates were requested." }
+
+{autofix_section}
 
 ---
 ### 📚 Documentation:
-{state.get("doc_summary") or "No documentation summary generated."}
+{doc_summary or "No documentation summary generated."}
 ---
-*Reviewed by DevPilot AI — Powered by Gemini 2.5 Flash via Google GenAI SDK*
+*Reviewed by DevPilot AI — Powered by Gemini via Google ADK*
     """
 
-    return state
+    return {
+        "pr_title": pr_title, "pr_code": pr_code, "filename": filename, "pr_url": pr_url,
+        "review_result": review_data, "security_result": security_data,
+        "fixed_code": fixed_code, "generated_tests": generated_testcases,
+        "doc_summary": doc_summary, "final_summary": final_summary,
+        "should_block_merge": should_block_merge, "severity_level": severity_level,
+        "overall_score": score,
+    }
 
-
-# ── Run Local Test Verification ───────────────────────────
 
 if __name__ == "__main__":
-    result = run_pipeline(
+    import asyncio
+    result = asyncio.run(run_pipeline(
         pr_title="Add user login feature",
-        pr_code="""
-def login(username, password):
-    query = "SELECT * FROM users WHERE username='" + username + "'"
-    user = db.execute(query)
-    if user and user.password == password:
-        return True
-    return False
-        """,
+        pr_code="def login(u,p):\n    q = \"SELECT * FROM users WHERE u='\"+u+\"'\"\n    return db.execute(q)",
         filename="auth.py",
         pr_url="https://github.com"
-    )
-
-    print("\n" + "=" * 60)
+    ))
     print(result["final_summary"])
-    print("=" * 60)
-    print(f"Block Merge: {result['should_block_merge']}")

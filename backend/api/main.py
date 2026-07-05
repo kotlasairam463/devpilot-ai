@@ -3,6 +3,7 @@ from fastapi import FastAPI, status, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+
 from workflow.orchestrator import run_pipeline
 from database.mongo import DevPilotDB
 from mcp.github_mcp import GitHubMCP
@@ -28,25 +29,15 @@ class PRRequest(BaseModel):
     pr_url: str = "http://github.com/test/pr/1"
 
 
-def process_webhook_pipeline(repo_name: str, pr_number: int, pr_title: str, pr_url: str, files: list):
-    """
-    Background worker that runs the multi-agent pipeline over files
-    without blocking the primary web application request-response threads.
-    """
+async def process_webhook_pipeline(repo_name: str, pr_number: int, pr_title: str, pr_url: str, files: list, head_sha: str):
     results = []
-
     for file in files[:5]:
         if not file.get("code") or len(file["code"].strip()) == 0:
             continue
-
         print(f"⚙️ Background Worker processing file: {file.get('filename')}")
-
         try:
-            result = run_pipeline(
-                pr_title=pr_title,
-                pr_code=file["code"],
-                filename=file["filename"],
-                pr_url=pr_url
+            result = await run_pipeline(
+                pr_title=pr_title, pr_code=file["code"], filename=file["filename"], pr_url=pr_url
             )
         except Exception as e:
             print(f"❌ Pipeline failed for {file.get('filename')}: {e}")
@@ -54,8 +45,7 @@ def process_webhook_pipeline(repo_name: str, pr_number: int, pr_title: str, pr_u
 
         try:
             db.save_review(
-                {"pr_title": pr_title, "pr_url": pr_url, "filename": file["filename"]},
-                result
+                {"pr_title": pr_title, "pr_url": pr_url, "filename": file["filename"]}, result
             )
         except Exception as e:
             print(f"⚠️ Failed to save review to DB: {e}")
@@ -70,6 +60,10 @@ def process_webhook_pipeline(repo_name: str, pr_number: int, pr_title: str, pr_u
         except Exception as e:
             print(f"❌ Failed to post GitHub comment: {e}")
 
+    # Mark this commit as reviewed regardless of whether any files matched,
+    # so future pushes only diff from here forward.
+    db.set_last_reviewed_sha(pr_url, head_sha)
+
 
 @app.get("/")
 def home():
@@ -81,9 +75,11 @@ def home():
 
 
 @app.post("/api/review", status_code=status.HTTP_200_OK)
-def review_pr(request: PRRequest):
+async def review_pr(request: PRRequest):
     """Manual trigger endpoint — handles single-file data streams from frontends"""
-    result = run_pipeline(
+    
+    # Safely await the synchronous multi-agent pipeline in a background thread
+    result = await run_pipeline(
         pr_title=request.pr_title,
         pr_code=request.pr_code,
         filename=request.filename,
@@ -109,23 +105,18 @@ def review_pr(request: PRRequest):
         "doc_summary": result.get("doc_summary")
     }
 
-
 @app.post("/webhook")
 async def github_webhook(request: Request, background_tasks: BackgroundTasks):
-    """Receives GitHub PR events automatically — triggered by GitHub webhook"""
-
     try:
         payload = await request.json()
     except Exception:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload")
 
-    # GitHub sends a "ping" event (no "action") when the webhook is first registered
     if payload.get("action") not in ["opened", "synchronize"]:
         return {"status": "ignored"}
 
     pr = payload.get("pull_request")
     repository = payload.get("repository")
-
     if not pr or not repository:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing pull_request or repository in payload")
 
@@ -133,35 +124,38 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks):
     pr_number = pr.get("number")
     pr_title = pr.get("title")
     pr_url = pr.get("html_url", "")
+    head_sha = pr.get("head", {}).get("sha", "")
 
     if not all([repo_name, pr_number, pr_title]):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing required PR fields")
 
     print(f"📥 PR received: #{pr_number} — {pr_title}")
 
+    last_sha = db.get_last_reviewed_sha(pr_url)
+
     try:
-        files = github.get_pr_files(repo_name, pr_number)
+        if last_sha:
+            files = github.get_pr_files_since(repo_name, pr_number, last_sha)
+            print(f"🔄 Incremental review — {len(files)} file(s) changed since last review")
+        else:
+            files = github.get_pr_files(repo_name, pr_number)
+            print(f"🆕 First review for this PR — {len(files)} file(s)")
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Failed to fetch PR files from GitHub: {e}")
 
     if not files:
-        return {"status": "no files to review"}
+        return {"status": "no new files to review"}
 
-    # Queue the review as a background task so we respond to GitHub
-    # immediately instead of risking a webhook delivery timeout.
     background_tasks.add_task(
         process_webhook_pipeline,
-        repo_name=repo_name,
-        pr_number=pr_number,
-        pr_title=pr_title,
-        pr_url=pr_url,
-        files=files
+        repo_name=repo_name, pr_number=pr_number, pr_title=pr_title,
+        pr_url=pr_url, files=files, head_sha=head_sha
     )
 
     return {
         "status": "accepted",
         "message": f"Review queued for PR #{pr_number}",
-        "files_queued": min(len(files), 3)
+        "files_queued": min(len(files), 5)
     }
 
 @app.get("/api/analytics")
