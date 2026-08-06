@@ -74,6 +74,7 @@ async def run_pipeline(pr_title: str, pr_code: str, filename: str, pr_url: str =
                     pass
     except Exception as e:
         print(f"⚠️ Pipeline execution error (likely transient API issue): {e}")
+        
     print(f"🔍 CAPTURED AGENT OUTPUTS: {agent_outputs}")
 
     review_data = _parse(agent_outputs.get("ReviewAgent"), {})
