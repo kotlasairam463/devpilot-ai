@@ -74,7 +74,7 @@ async def run_pipeline(pr_title: str, pr_code: str, filename: str, pr_url: str =
                     pass
     except Exception as e:
         print(f"⚠️ Pipeline execution error (likely transient API issue): {e}")
-        
+
     print(f"🔍 CAPTURED AGENT OUTPUTS: {agent_outputs}")
 
     review_data = _parse(agent_outputs.get("ReviewAgent"), {})
@@ -108,7 +108,7 @@ async def run_pipeline(pr_title: str, pr_code: str, filename: str, pr_url: str =
     final_summary = f"""
 ## 🤖 DevPilot AI Review
 
-**PR:** {pr_title}
+**PR:**  {pr_title}
 **File:** {filename}
 **Code Quality Score:** {score}/10
 **Security Status:** {'🔴 UNSAFE' if vulns else '✅ SAFE'}
@@ -156,3 +156,4 @@ if __name__ == "__main__":
         pr_url="https://github.com"
     ))
     print(result["final_summary"])
+
