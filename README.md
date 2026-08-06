@@ -364,7 +364,7 @@ why MongoDB is external (Atlas), not a local container.
    ```
    To rotate a secret later without deleting it:
    ```powershell
-   "new_value" | gcloud secrets versions add github-token --data-file=-
+  echo -n "new_value" | gcloud secrets versions add github-token --data-file=-
    ```
    Then force the running revision to pick up the new version:
    ```powershell
